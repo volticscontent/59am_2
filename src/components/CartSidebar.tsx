@@ -3,12 +3,16 @@
 import React from 'react';
 import Image from 'next/image';
 import { useCart } from '@/contexts/CartContext';
+import { useBundle } from '@/contexts/BundleContext';
+
 import { X, Plus, Minus, ShoppingBag, ExternalLink } from 'lucide-react';
 
 import { useRouter } from 'next/navigation';
 
 const CartSidebar: React.FC = () => {
   const { state, removeItem, updateQuantity, closeCart, getCheckoutUrl } = useCart();
+  const { selectedItems, removeProduct } = useBundle();
+
 
 
   const router = useRouter();
@@ -121,11 +125,19 @@ const CartSidebar: React.FC = () => {
 
                       {/* Remove Button */}
                       <button
-                        onClick={() => removeItem(item.handle)}
+                        onClick={() => {
+                          removeItem(item.handle);
+                          // Sincroniza com a seleção do bundle
+                          const bundleIndex = selectedItems.findIndex(i => i?.handle === item.handle);
+                          if (bundleIndex !== -1) {
+                            removeProduct(bundleIndex);
+                          }
+                        }}
                         className="p-1 hover:bg-gray-200 rounded-full transition-colors self-start"
                       >
                         <X className="w-4 h-4 text-gray-400" />
                       </button>
+
                     </div>
 
                     {/* Bundle Items Sub-list */}

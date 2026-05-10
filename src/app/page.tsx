@@ -359,12 +359,31 @@ export default function Home() {
 
                         {/* Bundle Select Overlay */}
                         {isBundleActive && (
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button className="bg-white text-black px-6 py-2 rounded-full font-bold text-sm uppercase">
-                              Auswählen
-                            </button>
+                          <div className={`absolute inset-0 flex items-center justify-center transition-opacity ${
+                            selectedItems.some(i => i?.handle === product.handle) 
+                              ? "bg-black/60 opacity-100" 
+                              : "bg-black/40 opacity-0 group-hover:opacity-100"
+                          }`}>
+                            {selectedItems.some(i => i?.handle === product.handle) ? (
+                              <button 
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const idx = selectedItems.findIndex(i => i?.handle === product.handle);
+                                  if (idx !== -1) removeProduct(idx);
+                                }}
+                                className="bg-red-600 text-white px-6 py-2 rounded-full font-bold text-sm uppercase hover:bg-red-700 transition-colors"
+                              >
+                                Entfernen
+                              </button>
+                            ) : (
+                              <button className="bg-white text-black px-6 py-2 rounded-full font-bold text-sm uppercase">
+                                Auswählen
+                              </button>
+                            )}
                           </div>
                         )}
+
 
                         {/* Promotion Badge */}
                         {product.promotion && (
@@ -464,12 +483,19 @@ export default function Home() {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   removeItem(product.handle);
+                                  
+                                  // Sincroniza com a seleção do bundle
+                                  const bundleIndex = selectedItems.findIndex(i => i?.handle === product.handle);
+                                  if (bundleIndex !== -1) {
+                                    removeProduct(bundleIndex);
+                                  }
                                 }}
                                 className="flex-1 bg-[#e1e1e1] text-black text-[11px] font-bold py-3 px-2 rounded-none hover:bg-gray-300 transition-colors uppercase"
                               >
                                 REMOVE
                               </button>
                             )}
+
                           </div>
                           {cartState.totalItems > 0 ? (
                             <button
