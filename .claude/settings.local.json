@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(vercel env *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Códigos\\\\Lojas\\\\Perfumes\\\\Reino_Unido\\\\nathan\\\\NOVO\\\\perfumetrack\" -Recurse -Directory)",
+      "Bash(Select-Object -First 20 FullName)",
+      "Bash(grep -E \"\\\\.tsx$|\\\\.jsx$\")",
+      "Bash(del \"D:\\\\Códigos\\\\Lojas\\\\Perfumes\\\\Alemanha\\\\59Am-main\\\\src\\\\app\\\\pressel\\\\page.tsx\")",
+      "Bash(git rm *)",
+      "Bash(node -e \"const p = require\\('./src/data/products.json'\\); console.log\\('Total:', p.products.length\\); console.log\\('First IDs:', p.products.slice\\(0,5\\).map\\(x => x.id\\)\\);\")",
+      "Bash(node -e \"const p = require\\('./src/data/products.json'\\); const last = p.products[p.products.length-1]; console.log\\('Last product:', JSON.stringify\\(last, null, 2\\).slice\\(0, 500\\)\\); console.log\\('Keys in root:', Object.keys\\(p\\)\\);\")",
+      "Bash(node -e \"const fs = require\\('fs'\\); const content = fs.readFileSync\\('./src/data/products.json', 'utf8'\\); const lastLines = content.split\\('\\\\n'\\).slice\\(-20\\).join\\('\\\\n'\\); console.log\\(lastLines\\);\")",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const p = require\\('./src/data/products.json'\\); const b3 = p.products.find\\(x => x.id === '1000'\\); const b6 = p.products.find\\(x => x.id === '1001'\\); console.log\\('bundle-3:', b3?.title, b3?.price\\); console.log\\('bundle-6:', b6?.title, b6?.price\\);\")",
+      "Bash(Select-String \"next\")",
+      "WebSearch",
+      "WebFetch(domain:utmify.help.center)",
+      "WebFetch(domain:www.scribd.com)",
+      "WebFetch(domain:ajuda.xgrow.com)",
+      "WebFetch(domain:docs.centralcart.com.br)",
+      "WebFetch(domain:ajuda.disrupty.com.br)",
+      "WebFetch(domain:docs.centralcart.com)",
+      "WebFetch(domain:ajuda.herospark.com)",
+      "WebFetch(domain:chatwoot.herospark.com)",
+      "WebFetch(domain:help.onprofit.com.br)",
+      "WebFetch(domain:help.monetizze.com.br)",
+      "WebFetch(domain:v0.app)"
+    ]
+  }
+}
