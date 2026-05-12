@@ -188,6 +188,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addItem = (item: Omit<CartItem, 'quantity'>) => {
     dispatch({ type: 'ADD_ITEM', payload: item });
+    openCart();
 
     // Use centralized tracking
     trackEcommerce('add_to_cart', {
