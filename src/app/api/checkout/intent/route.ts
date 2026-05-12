@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { query } from '@/utils/db';
 import { sendMetaEvent, hashData } from '@/utils/metaCapi';
+import { sendTikTokEvent } from '@/utils/tiktokCapi';
 import productsData from '@/data/products.json';
 import crypto from 'crypto';
 
@@ -171,6 +172,8 @@ export async function POST(request: Request) {
                 utm_term: utmData?.utm_term?.substring(0, 500) || '',
                 src: utmData?.src?.substring(0, 500) || '',
                 sck: utmData?.sck?.substring(0, 500) || '',
+                fbclid: utmData?.fbclid?.substring(0, 500) || '',
+                ttclid: utmData?.ttclid?.substring(0, 500) || '',
             }
         });
 
@@ -190,18 +193,40 @@ export async function POST(request: Request) {
             if (nameParts.length > 1) userDataParams.ln = hashData(nameParts.slice(1).join(' '));
         }
 
+        const fbc = utmData?.fbclid ? `fb.1.${Date.now()}.${utmData.fbclid}` : null;
+        const ttclid = utmData?.ttclid || null;
+
         await sendMetaEvent({
             eventName: 'InitiateCheckout',
             eventSourceUrl: request.headers.get('referer') || request.url,
             userIp,
             userAgent,
             eventId,
+            fbc,
             userData: Object.keys(userDataParams).length > 0 ? userDataParams : undefined,
             customData: {
                 currency: process.env.STRIPE_CURRENCY || 'eur',
                 value: totalValue,
                 content_ids: items.map((i: any) => i.sku),
                 content_type: 'product',
+            }
+        });
+
+        await sendTikTokEvent({
+            event: 'InitiateCheckout',
+            eventId,
+            eventSourceUrl: request.headers.get('referer') || request.url,
+            userIp,
+            userAgent,
+            ttclid,
+            properties: {
+                currency: (process.env.STRIPE_CURRENCY || 'eur').toUpperCase(),
+                value: totalValue,
+                content_type: 'product',
+                contents: items.map((i: any) => ({
+                    content_id: i.sku,
+                    quantity: i.quantity || 1
+                }))
             }
         });
 

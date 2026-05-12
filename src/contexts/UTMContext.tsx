@@ -298,12 +298,6 @@ const UTMProviderInner: React.FC<UTMProviderProps> = ({
         content_category: productData.category,
         value: productData.price || 0,
         currency: productData.currency || 'EUR',
-        // Adicionar dados aprimorados para melhor match quality
-        user_data: {
-          client_user_agent: dataLayer?.user_agent,
-          fbc: dataLayer?.utms?.fbclid ? `fb.1.${Date.now()}.${dataLayer.utms.fbclid}` : undefined,
-          fbp: dataLayer?.client_id ? `fb.1.${Date.now()}.${dataLayer.client_id}` : undefined
-        }
       };
 
       (window as WindowWithTracking).fbq!('track', 'ViewContent', metaPixelData);
@@ -388,16 +382,8 @@ const UTMProviderInner: React.FC<UTMProviderProps> = ({
         value: ecommerce.value || 0,
         currency: ecommerce.currency || 'EUR',
         num_items: ecommerce.items?.length || 1,
-        // Adicionar dados aprimorados para melhor match quality
-        user_data: {
-          client_user_agent: dataLayer?.user_agent,
-          fbc: dataLayer?.utms?.fbclid ? `fb.1.${Date.now()}.${dataLayer.utms.fbclid}` : undefined,
-          fbp: dataLayer?.client_id ? `fb.1.${Date.now()}.${dataLayer.client_id}` : undefined,
-          external_id: dataLayer?.fingerprint_id
-        }
       };
 
-      // Usar eventos NATIVOS do Meta Pixel para otimização automática
       (window as WindowWithTracking).fbq!('track', fbqEvent, metaPixelData);
     }
 
