@@ -13,10 +13,13 @@ interface BundleContextType {
   returnToHandle: string | null;
   setReturnToHandle: (handle: string | null) => void;
   startBundle: (size: number, initialProduct?: Product) => void;
+  initBundleWithItems: (size: number, items: Product[]) => void;
+  updateBundleSize: (size: number) => void;
 
 
   selectProduct: (product: Product) => void;
   removeProduct: (index: number) => void;
+  removeProductByHandle: (handle: string) => void;
   clearBundle: () => void;
   isComplete: boolean;
 }
@@ -69,7 +72,39 @@ export const BundleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     setSelectedItems(items);
     setIsBundleActive(true);
-    router.push('/?bundleActive=true');
+    router.push('/?bundleActive=true', { scroll: false });
+  };
+
+  // Initialise bundle with all items pre-filled (no routing side effects)
+  const initBundleWithItems = (size: number, items: Product[]) => {
+    setBundleSize(size);
+    const slots: (Product | null)[] = new Array(size).fill(null);
+    items.forEach((p, i) => {
+      if (i < size) slots[i] = p;
+    });
+    setSelectedItems(slots);
+    setCurrentSlot(null);
+    setReturnToHandle(items[0]?.handle || null);
+    setIsBundleActive(true);
+  };
+
+  const updateBundleSize = (newSize: number) => {
+    setBundleSize(newSize);
+    setSelectedItems(prev => {
+      const newItems = new Array(newSize).fill(null);
+      prev.forEach((item, i) => {
+        if (i < newSize) {
+          newItems[i] = item;
+        }
+      });
+      
+      // Calculate next slot inside the update function to ensure consistency
+      const firstEmpty = newItems.findIndex(item => item === null);
+      setCurrentSlot(firstEmpty !== -1 ? firstEmpty : null);
+      
+      return newItems;
+    });
+    setIsBundleActive(true);
   };
 
 
@@ -99,7 +134,7 @@ export const BundleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const nextSlot = newItems.findIndex(item => item === null);
     if (nextSlot !== -1) {
       setCurrentSlot(nextSlot);
-      router.push('/?bundleActive=true'); 
+      router.push('/?bundleActive=true', { scroll: false }); 
     } else {
       setCurrentSlot(null);
       const targetHandle = (targetSlot === 0 ? product.handle : returnToHandle) || newItems[0]?.handle;
@@ -118,6 +153,15 @@ export const BundleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     newItems[index] = null;
     setSelectedItems(newItems);
     setCurrentSlot(index);
+  };
+
+  const removeProductByHandle = (handle: string) => {
+    const newItems = selectedItems.map(item =>
+      item?.handle === handle ? null : item
+    );
+    setSelectedItems(newItems);
+    const firstNull = newItems.findIndex(item => item === null);
+    if (firstNull !== -1) setCurrentSlot(firstNull);
   };
 
   const clearBundle = () => {
@@ -140,10 +184,13 @@ export const BundleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       returnToHandle,
       setReturnToHandle,
       startBundle,
+      initBundleWithItems,
+      updateBundleSize,
 
 
       selectProduct,
       removeProduct,
+      removeProductByHandle,
       clearBundle,
       isComplete
     }}>

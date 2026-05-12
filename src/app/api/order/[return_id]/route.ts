@@ -21,6 +21,7 @@ export async function GET(
         let customerEmail: string | null = null;
         let customerPhone: string | null = null;
         let customerName: string | null = null;
+        let sessionMetadata: any = {};
 
         if (return_id.startsWith('cs_')) {
             const session = await stripe.checkout.sessions.retrieve(return_id, {
@@ -34,6 +35,7 @@ export async function GET(
             customerEmail = session.customer_details?.email || session.customer_email || null;
             customerPhone = session.customer_details?.phone || null;
             customerName = session.customer_details?.name || null;
+            sessionMetadata = (session as any).metadata || {};
             const productsData = require('@/data/products.json');
             lineItemsData = session.line_items?.data.map((item: any) => {
                 const name = item.price?.product?.name || 'Product';
@@ -68,12 +70,15 @@ export async function GET(
             const { sendTikTokEvent } = require('@/utils/tiktokCapi');
             const userIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || request.headers.get('cf-connecting-ip') || null;
             const userAgent = request.headers.get('user-agent') || null;
+            const fbc = sessionMetadata?.fbclid ? `fb.1.${Date.now()}.${sessionMetadata.fbclid}` : null;
+            const ttclid = sessionMetadata?.ttclid || null;
 
             await sendMetaEvent({
                 eventName: 'Purchase',
                 eventSourceUrl: request.headers.get('referer') || request.url,
                 userIp,
                 userAgent,
+                fbc,
                 customData: {
                     currency: currency || process.env.STRIPE_CURRENCY || 'eur',
                     value: amount ? amount / 100 : 0,
@@ -88,6 +93,7 @@ export async function GET(
                 eventSourceUrl: request.headers.get('referer') || request.url,
                 userIp,
                 userAgent,
+                ttclid,
                 properties: {
                     currency: (currency || 'eur').toUpperCase(),
                     value: amount ? amount / 100 : 0,
@@ -109,12 +115,6 @@ export async function GET(
                     const utmCustomerEmail = customerEmail || 'nao_informado@email.com';
                     const utmCustomerName = customerName || 'Comprador';
                     const utmCustomerPhone = customerPhone || '11999999999';
-                    let sessionMetadata: any = {};
-
-                    if (return_id.startsWith('cs_')) {
-                        const session: any = await stripe.checkout.sessions.retrieve(return_id);
-                        sessionMetadata = session?.metadata || {};
-                    }
 
                     // Formatar data para YYYY-MM-DD HH:MM:SS
                     const formatDate = (date: Date) => date.toISOString().slice(0, 19).replace('T', ' ');

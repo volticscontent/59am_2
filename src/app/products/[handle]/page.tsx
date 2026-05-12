@@ -77,8 +77,8 @@ export default function ProductPage({ params }: { params: Promise<{ handle: stri
   const handle = Array.isArray(rawHandle) ? rawHandle[0] : rawHandle;
   const { addItem, addBundle, state } = useCart();
 
-  const { isBundleActive, bundleSize, selectedItems, currentSlot, startBundle, selectProduct, removeProduct, clearBundle, isComplete } = useBundle();
-  const { trackStoreProductViewed } = useUTM();
+  const { isBundleActive, bundleSize, selectedItems, currentSlot, startBundle, selectProduct, removeProduct, clearBundle, isComplete, initBundleWithItems, updateBundleSize } = useBundle();
+  const { trackStoreProductViewed, trackEcommerce } = useUTM();
   const router = useRouter();
 
   const [selectedImage, setSelectedImage] = useState<string>("");
@@ -121,9 +121,7 @@ export default function ProductPage({ params }: { params: Promise<{ handle: stri
 
     // Se for bundle e não estiver completo, redireciona para selecionar
     if (selectedPackageSize > 1 && !isComplete) {
-      // Já estamos na página do produto, então talvez queira focar no seletor?
-      // Ou ir para a home selecionar o próximo
-      router.push(`/?bundleSlot=${currentSlot || 1}&returnTo=${handle}`);
+      router.push(`/?bundleSlot=${currentSlot ?? 0}&returnTo=${handle}`);
       return;
     }
 
@@ -134,6 +132,18 @@ export default function ProductPage({ params }: { params: Promise<{ handle: stri
         size: selectedPackageSize,
         price: price,
         items: selectedItems as any[]
+      });
+      trackEcommerce('add_to_cart', {
+        currency: product.currency || 'EUR',
+        value: parseFloat(price),
+        items: (selectedItems as any[])
+          .filter(Boolean)
+          .map((item: any) => ({
+            item_id: item.id,
+            item_name: item.title,
+            price: parseFloat(price) / selectedPackageSize,
+            quantity: 1,
+          })),
       });
       return;
     }
@@ -161,13 +171,24 @@ export default function ProductPage({ params }: { params: Promise<{ handle: stri
           )
         : 0;
 
+      const itemPrice = getDiscountedPrice(product);
       addItem({
         handle: handle,
         variant_id: variantId,
         product_id: fetchedProductId,
         title: dbProduct.data?.title || product.title,
-        price: getDiscountedPrice(product).toString(),
+        price: itemPrice.toString(),
         image: product.images[0] || "",
+      });
+      trackEcommerce('add_to_cart', {
+        currency: product.currency || 'EUR',
+        value: itemPrice,
+        items: [{
+          item_id: handle,
+          item_name: dbProduct.data?.title || product.title,
+          price: itemPrice,
+          quantity: 1,
+        }],
       });
     } catch (err) {
       console.error("Erro ao adicionar produto", err);
@@ -228,6 +249,28 @@ export default function ProductPage({ params }: { params: Promise<{ handle: stri
       setSelectedPackageSize(bundleSize);
     }
   }, [isBundleActive, bundleSize]);
+
+  // When arriving from home with ?bundleComplete=true, read the 3 pre-selected handles
+  // from sessionStorage. Cart stays EMPTY — items only go to cart when user clicks "IN DEN WARENKORB".
+  useEffect(() => {
+    const isBundleCompleteParam = searchParams.get('bundleComplete') === 'true';
+    if (isBundleCompleteParam && !isBundleActive) {
+      const saved = sessionStorage.getItem('pendingBundle');
+      if (saved) {
+        const handles: string[] = JSON.parse(saved);
+        const products = handles
+          .map(h => getProductByHandle(h))
+          .filter((p): p is Product => p !== null && p !== undefined);
+
+        if (products.length === 3) {
+          initBundleWithItems(3, products);
+          setSelectedPackageSize(3);
+          sessionStorage.removeItem('pendingBundle');
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
 
   if (!product) {
@@ -419,7 +462,16 @@ export default function ProductPage({ params }: { params: Promise<{ handle: stri
                   onClick={() => {
                     setSelectedPackageSize(size);
                     if (size > 1) {
-                      startBundle(size, product as any);
+                      if (isBundleActive) {
+                        updateBundleSize(size);
+                        // Se aumentou o tamanho e não está completo, redireciona para a home para terminar
+                        const currentFilled = selectedItems.filter(i => i !== null).length;
+                        if (size > currentFilled) {
+                          router.push(`/?bundleSlot=${currentFilled}&returnTo=${handle}`);
+                        }
+                      } else {
+                        startBundle(size, product as any);
+                      }
                     } else {
                       clearBundle();
                     }
@@ -1340,7 +1392,7 @@ export default function ProductPage({ params }: { params: Promise<{ handle: stri
                 ? `In den Warenkorb - ${formatPrice(getDiscountedPrice(product), product.currency)}`
                 : isComplete
                   ? `Bundle in den Warenkorb - ${selectedPackageSize === 3 ? '€49,99' : '€99,99'}`
-                  : `Duft ${selectedItems.filter(i => i !== null).length + 1} von ${selectedPackageSize} auswählen`
+                  : `Paket vervollständigen - Duft ${selectedItems.filter(i => i !== null).length + 1} von ${selectedPackageSize} wählen`
               }
             </span>
           </button>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Header from "../components/Header";
 import CategoryCarousel from "../components/CategoryCarousel";
 import FilterSidebar from "../components/FilterSidebar";
@@ -11,6 +12,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   getProductData,
+  getProductByHandle,
   filterProducts,
   searchProducts,
   formatPrice,
@@ -21,16 +23,16 @@ import {
 } from "../utils/products";
 import { useBundle } from "@/contexts/BundleContext";
 import { useCart } from "@/contexts/CartContext";
+import { useUTM } from "@/contexts/UTMContext";
 import { useSearchParams } from "next/navigation";
 
 export default function Home() {
   const [productData, setProductData] = useState<ProductsData | null>(null);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
-  const [floatingIcons, setFloatingIcons] = useState<{ id: string; image: string }[]>([]);
-  const [isStackVisible, setIsStackVisible] = useState(false);
-  const [lastStackUpdate, setLastStackUpdate] = useState(0);
-  const [displayedTotal, setDisplayedTotal] = useState(0);
-  
+  // Local pre-selection state — does NOT touch the cart until user confirms on product page
+  const [pendingSelections, setPendingSelections] = useState<string[]>([]);
+  const router = useRouter();
+
   const {
     isBundleActive,
     bundleSize,
@@ -40,6 +42,7 @@ export default function Home() {
     setReturnToHandle,
     selectProduct,
     removeProduct,
+    removeProductByHandle,
     clearBundle,
   } = useBundle();
   
@@ -50,30 +53,34 @@ export default function Home() {
     openCart
   } = useCart();
 
+  const { trackEcommerce } = useUTM();
+
+  // Sync cart displayed total
+  const [displayedTotal, setDisplayedTotal] = useState(0);
+  useEffect(() => {
+    setDisplayedTotal(cartState.totalItems);
+  }, [cartState.totalItems]);
+
+  // Floating icon for cart additions (bundle mode or normal cart)
+  const [isStackVisible, setIsStackVisible] = useState(false);
+  const [lastStackUpdate, setLastStackUpdate] = useState(0);
+
   const addFloatingIcon = (productHandle: string) => {
     const isNewItem = !cartState.items.some(item => item.handle === productHandle);
-    
     if (isNewItem && cartState.totalItems > 0) {
       setIsStackVisible(true);
       setLastStackUpdate(Date.now());
-      
       const timer = setTimeout(() => {
         setIsStackVisible(false);
         setDisplayedTotal(cartState.totalItems + 1);
       }, 800);
       return () => clearTimeout(timer);
     } else {
-      // If same item or first item, just update the number (with a tiny delay to sync with state)
       setTimeout(() => {
         setDisplayedTotal(cartState.totalItems + 1);
       }, 50);
     }
   };
-
-  // Sync displayed total when items are removed
-  useEffect(() => {
-    setDisplayedTotal(cartState.totalItems);
-  }, [cartState.totalItems]);
 
   const searchParams = useSearchParams();
 
@@ -145,12 +152,29 @@ export default function Home() {
     applyFiltersAndSearch(filters, searchQuery);
   }, [productData, filters, searchQuery, applyFiltersAndSearch]);
 
-  // Auto-open cart when 5 items are reached
+  // Redirect to product page when 3 items are pre-selected (non-bundle flow)
+  // We do NOT add to cart here — the user clicks "IN DEN WARENKORB" on the product page
+  useEffect(() => {
+    if (pendingSelections.length === 3 && !isBundleActive) {
+      // Save selections to sessionStorage so product page can restore them
+      sessionStorage.setItem('pendingBundle', JSON.stringify(pendingSelections));
+      router.push(`/products/${pendingSelections[0]}?bundleComplete=true`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSelections.length]);
+
+  // Auto-open cart disabled per user request
+  /*
   useEffect(() => {
     if (cartState.totalItems === 5 && !cartState.isOpen) {
       openCart();
     }
   }, [cartState.totalItems, cartState.isOpen, openCart]);
+  */
+
+  // Note: Bundle synchronization with cart is handled on the product page
+  // The home page now uses pendingSelections for initial flow, so we don't clear the bundle here
+  // based on the cart state, which is intentionally empty during the pre-selection phase.
 
   const handleFiltersChange = (newFilters: FilterState) => {
     setFilters(newFilters);
@@ -161,6 +185,10 @@ export default function Home() {
     setSearchQuery(query);
     applyFiltersAndSearch(filters, query);
   };
+
+  const currentTotal = isBundleActive 
+    ? selectedItems.filter(i => i !== null).length 
+    : (cartState.totalItems + pendingSelections.length);
 
   const totalProducts = productData ? productData.products.length : 0;
   const filteredCount = filteredProducts.length;
@@ -174,9 +202,9 @@ export default function Home() {
       />
 
       {/* Top Alert Banner */}
-      {cartState.totalItems > 0 && (
+      {(cartState.totalItems > 0 || pendingSelections.length > 0 || isBundleActive) && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[60] w-[90%] max-w-md">
-          <div className="bg-white border border-gray-100 shadow-2xl rounded-xl p-4 flex items-start gap-3 animate-slide-down" key={cartState.totalItems}>
+          <div className="bg-white border border-gray-100 shadow-2xl rounded-xl p-4 flex items-start gap-3 animate-slide-down" key={currentTotal}>
             <div className="mt-1">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
@@ -185,17 +213,17 @@ export default function Home() {
               </svg>
             </div>
             <div className="flex-1">
-              {cartState.totalItems < 3 ? (
+              {currentTotal < 3 ? (
                 <>
                   <p className="text-sm font-bold text-gray-900">Mix & match — 3 perfumes por £49.99</p>
-                  <p className="text-xs text-gray-500">{3 - cartState.totalItems} perfumes missing. Unlock the discount.</p>
+                  <p className="text-xs text-gray-500">{3 - currentTotal} perfumes missing. Unlock the discount.</p>
                 </>
-              ) : cartState.totalItems === 3 ? (
+              ) : currentTotal === 3 ? (
                 <>
                   <p className="text-sm font-bold text-gray-900 text-green-600">🎉 Discount Unlocked!</p>
                   <p className="text-xs text-gray-500">Congratulations, you&apos;ve unlocked the discount 3 perfumes for 49.99. Select more 2 perfumes to unlock the maximum discount.</p>
                 </>
-              ) : cartState.totalItems === 4 ? (
+              ) : currentTotal === 4 ? (
                 <>
                   <p className="text-sm font-bold text-gray-900">Continue adicionando!</p>
                   <p className="text-xs text-gray-500">1 more perfume to unlock the maximum discount.</p>
@@ -311,6 +339,24 @@ export default function Home() {
                   }
                 };
 
+                const handleSelectClick = (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Pre-select for bundle (max 3, no duplicates) — does NOT add to cart
+                  if (pendingSelections.includes(product.handle)) return;
+                  if (pendingSelections.length >= 3) return;
+                  setPendingSelections(prev => [...prev, product.handle]);
+                };
+
+                const handleDeselectClick = (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setPendingSelections(prev => prev.filter(h => h !== product.handle));
+                };
+
+                const isSelected = pendingSelections.includes(product.handle);
+                const selectionIndex = pendingSelections.indexOf(product.handle);
+
                 return (
                   <div
                     key={product.id}
@@ -359,31 +405,12 @@ export default function Home() {
 
                         {/* Bundle Select Overlay */}
                         {isBundleActive && (
-                          <div className={`absolute inset-0 flex items-center justify-center transition-opacity ${
-                            selectedItems.some(i => i?.handle === product.handle) 
-                              ? "bg-black/60 opacity-100" 
-                              : "bg-black/40 opacity-0 group-hover:opacity-100"
-                          }`}>
-                            {selectedItems.some(i => i?.handle === product.handle) ? (
-                              <button 
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  const idx = selectedItems.findIndex(i => i?.handle === product.handle);
-                                  if (idx !== -1) removeProduct(idx);
-                                }}
-                                className="bg-red-600 text-white px-6 py-2 rounded-full font-bold text-sm uppercase hover:bg-red-700 transition-colors"
-                              >
-                                Entfernen
-                              </button>
-                            ) : (
-                              <button className="bg-white text-black px-6 py-2 rounded-full font-bold text-sm uppercase">
-                                Auswählen
-                              </button>
-                            )}
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button className="bg-white text-black px-6 py-2 rounded-full font-bold text-sm uppercase">
+                              Auswählen
+                            </button>
                           </div>
                         )}
-
 
                         {/* Promotion Badge */}
                         {product.promotion && (
@@ -460,34 +487,25 @@ export default function Home() {
                         <div className="flex flex-col gap-2 px-4 mt-auto">
                           <div className="flex gap-2">
                             <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                addItem({
-                                  handle: product.handle,
-                                  variant_id: Number(product.id),
-                                  product_id: Number(product.id),
-                                  title: product.title,
-                                  price: getDiscountedPrice(product).toString(),
-                                  image: product.images[0] || ""
-                                });
-                                addFloatingIcon(product.handle);
-                              }}
-                              className={`flex-1 bg-black text-white text-[11px] font-bold py-3 px-2 rounded-none hover:bg-gray-800 transition-colors uppercase`}
+                              onClick={handleSelectClick}
+                              disabled={pendingSelections.length >= 3 && !isSelected}
+                              className={`flex-1 text-[11px] font-bold py-3 px-2 rounded-none transition-colors uppercase ${
+                                pendingSelections.length >= 3 && !isSelected
+                                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                  : 'bg-black text-white hover:bg-gray-800'
+                              }`}
                             >
                               SELECT
                             </button>
-                            {cartState.items.some(item => item.handle === product.handle) && (
+                            {(isSelected || cartState.items.some(item => item.handle === product.handle)) && (
                               <button
                                 onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  removeItem(product.handle);
-                                  
-                                  // Sincroniza com a seleção do bundle
-                                  const bundleIndex = selectedItems.findIndex(i => i?.handle === product.handle);
-                                  if (bundleIndex !== -1) {
-                                    removeProduct(bundleIndex);
+                                  if (isSelected) {
+                                    handleDeselectClick(e);
+                                  } else {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    removeItem(product.handle);
                                   }
                                 }}
                                 className="flex-1 bg-[#e1e1e1] text-black text-[11px] font-bold py-3 px-2 rounded-none hover:bg-gray-300 transition-colors uppercase"
@@ -495,13 +513,47 @@ export default function Home() {
                                 REMOVE
                               </button>
                             )}
-
                           </div>
-                          {cartState.totalItems > 0 ? (
+                          {cartState.totalItems > 0 || pendingSelections.length > 0 ? (
                             <button
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                
+                                // Move any pending selections to the cart
+                                if (pendingSelections.length > 0) {
+                                  const pendingProds = pendingSelections
+                                    .map(h => getProductByHandle(h))
+                                    .filter((p): p is Product => p !== null && p !== undefined);
+
+                                  pendingProds.forEach(prod => {
+                                    addItem({
+                                      handle: prod.handle,
+                                      variant_id: Number(prod.id),
+                                      product_id: Number(prod.id),
+                                      title: prod.title,
+                                      price: getDiscountedPrice(prod).toString(),
+                                      image: prod.images[0] || ""
+                                    });
+                                  });
+
+                                  const totalValue = pendingProds.reduce(
+                                    (sum, p) => sum + getDiscountedPrice(p), 0
+                                  );
+                                  trackEcommerce('add_to_cart', {
+                                    currency: 'EUR',
+                                    value: totalValue,
+                                    items: pendingProds.map(p => ({
+                                      item_id: p.id,
+                                      item_name: p.title,
+                                      price: getDiscountedPrice(p),
+                                      quantity: 1,
+                                    })),
+                                  });
+
+                                  setPendingSelections([]);
+                                }
+                                
                                 openCart();
                               }}
                               className="w-full bg-white text-black text-[11px] font-bold py-3 px-4 rounded-none border border-black hover:bg-gray-50 transition-colors uppercase text-center mt-1"
@@ -564,7 +616,12 @@ export default function Home() {
                 </span>
               </div>
               <button
-                onClick={clearBundle}
+                onClick={() => {
+                  selectedItems.forEach(item => {
+                    if (item) removeItem(item.handle);
+                  });
+                  clearBundle();
+                }}
                 className="text-[10px] md:text-xs text-gray-500 underline"
               >
                 Abbrechen
@@ -591,6 +648,7 @@ export default function Home() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (item) removeItem(item.handle);
                           removeProduct(i);
                         }}
                         className="absolute top-0 left-0 z-10 bg-red-500 shadow-md rounded-full p-0.5 hover:bg-red-600 transition-colors border border-red-700 text-white"
@@ -636,9 +694,10 @@ export default function Home() {
       <Newsletter />
 
       {/* Floating Icon Stack */}
-      <div className="fixed bottom-6 right-6 z-[100] flex flex-col-reverse gap-3 items-end">
-        {/* Base Icon (Always visible if items > 0) */}
-        {cartState.totalItems > 0 && (
+      {/* Hidden when selecting bundle items to avoid UI clutter */}
+      {!(isBundleActive || pendingSelections.length > 0) && cartState.totalItems > 0 && (
+        <div className="fixed bottom-6 right-6 z-[100] flex flex-col-reverse gap-3 items-end">
+          {/* Base Icon (Always visible if items > 0) */}
           <button 
             key="base-icon"
             onClick={openCart}
@@ -658,9 +717,8 @@ export default function Home() {
               {displayedTotal}
             </span>
           </button>
-        )}
 
-        {/* Floating Stack (Only items from index 1 onwards, visible for 0.8s) */}
+          {/* Floating Stack (Only items from index 1 onwards, visible for 0.8s) */}
         {isStackVisible && cartState.items.slice(1).map((item, index) => {
           return (
             <div 
@@ -686,7 +744,8 @@ export default function Home() {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Footer */}
       <Footer />
